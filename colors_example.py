@@ -3,28 +3,29 @@
 #Generate a 2D self-organizing map of 3D RGB color space.
 #Generate a test set of colors and predict their positions in the 2D representation.
 
-import random
+from random import random
 from matplotlib import pyplot as plt
 
 import som
 
+ntrain=500
+ntest= 50
+
 #Generate training data in RGB space (random colors)
-ntrain=1000
-color_data = [ [ random.random()*255 for i in xrange(3) ] for i in xrange(ntrain) ]
+color_data = [ [ random()*255 for i in xrange(3) ] for i in xrange(ntrain) ]
 
 #Create map object
-mymap = som.map(color_data, nnodes=2500, dimension=2)
+mymap = som.map(color_data, nnodes=900)
 
 #Train map
-mymap.train(nsteps=2000)
+mymap.train(nsteps=1000, progress=True)
 
 #Generate test set of random colors, predict their map coordinates.
-ntest = 50
 test_x      = []
 test_y      = []
 test_color  = []
 for i in xrange(ntest):
-    t = [ random.random()*255 for j in xrange(3) ]
+    t = [ random()*255 for j in xrange(3) ]
     #Predict position in map
     pred = mymap.classify(t)
     test_color.append([ j/255. for j in t ])
@@ -32,17 +33,17 @@ for i in xrange(ntest):
     test_y.append(pred[1])
 
 #Generate plots
-xs = [ i.lowCoords[0] for i in mymap.nodes ]
-ys = [ i.lowCoords[1] for i in mymap.nodes ]
-colors = []
+nodexs = [ i.lowCoords[0] for i in mymap.nodes ]
+nodeys = [ i.lowCoords[1] for i in mymap.nodes ]
+nodecolors = []
 for i in xrange(mymap.nnodes):
     c = mymap.unnormalizeDataPoint(mymap.nodes[i].highCoords)
     c = [ c[i]/255. if (c[i] > 0) else 0. for i in xrange(len(c)) ]
-    colors.append(c)
+    nodecolors.append(c)
 
-#Plot map
-plt.scatter(xs,ys,c=colors,s=400,marker='s')
-#Plot test data predictions
+#Plot nodes
+plt.scatter(nodexs,nodeys,c=nodecolors,s=200,marker='s')
+#Plot predicted positions of test data
 plt.scatter(test_x,test_y,c=test_color,s=50,marker='o')
 plt.savefig('colors_example.png')
 

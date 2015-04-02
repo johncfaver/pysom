@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-import sys
-import random 
+from copy import deepcopy
+from random import random, choice
 import math
 
 def meanAndStd(x):
-    """Return mean and standard devation of a list."""
+    """Return mean and standard devation of a list of floats."""
     N = len(x)
     m = sum(x)/float(N)
     v = sum([ math.pow(x[i]-m,2.0) for i in xrange(N) ])/(N-1)
@@ -13,6 +13,7 @@ def meanAndStd(x):
 
 def squareDistance(x,y):
     """Return squared Euclidian distance between points x and y."""
+    assert(len(x)==len(y)), "Input vectors are of unequal size."
     return sum([ math.pow(x[i]-y[i],2) for i in xrange(len(x)) ])
 
 def distance(x,y):
@@ -23,7 +24,7 @@ class map():
     def __init__(self, data, nnodes=100, dimension=2, normalize=True):
         """Set up a self-organizing map to model input data.
         Input data should be a list of lists (2D array-like)
-        with no headers.
+        of floats.
         """
         self.data           = data            
         self.ndata          = len(data)
@@ -48,33 +49,34 @@ class map():
         print "Checking input data...",
         assert(self.ndata > 0), "No input data!"
         for row in self.data:
-            assert(len(row) == self.highDimension), "Input data is not a regular matrix!"
+            assert(len(row) == self.highDimension), "Input data is not a rectangular matrix!"
             row = [ float(i) for i in row ]
         assert(self.nnodes > 0), "No nodes!"
-        assert(self.lowDimension > 0 and self.lowDimension < self.highDimension), "Bad dimensions!"
+        assert(self.lowDimension > 0 and self.lowDimension < self.highDimension), "Bad map dimensions!"
         print "Done."
         print "Ready to map {}-D data to {}-D representation.".format(self.highDimension, self.lowDimension)
         print "Using {} nodes.".format(self.nnodes)
         print "Training set size: {}".format(self.ndata)
         print "Map length: {}".format(self.mapLength)
 
-
     def normalizeData(self):
         """Normalize input data by converting to z-values,
         i.e. (x-m)/s  where m is the mean and s is the standard deviation.
         If s == 0 then we will be ignoring this descriptor in the future.
         Save the m and s values so we can transform back to original data scale.
+        normalizedData will hold the newly normalized data, while
+        data while hold the original data.
         """
         print "Normalizing Data...",
-        self.originalData = self.data[:]
+        self.normalizedData = deepcopy(self.data)
         self.normalizationParameters = []
         for d in xrange(self.highDimension):
-            dmean, dstd = meanAndStd([ x[d] for x in self.originalData ])
+            dmean, dstd = meanAndStd([ x[d] for x in self.data ])
             self.normalizationParameters.append((dmean,dstd))
             if dstd == 0.:
                 self.ignoreColumns.append(d)
             else:
-                for row in self.data:
+                for row in self.normalizedData:
                     row[d] = (row[d]-dmean)/dstd
         print 'Done.'
         if(len(self.ignoreColumns)>0):
@@ -87,8 +89,7 @@ class map():
             if d in self.ignoreColumns:
                 continue
             else:
-                u = self.normalizationParameters[d][0]
-                s = self.normalizationParameters[d][1]
+                u,s = self.normalizationParameters[d]
                 x2[d] = (x[d]-u)/s
         return x2
 
@@ -99,22 +100,24 @@ class map():
             if d in self.ignoreColumns:
                 continue
             else:
-                u = self.normalizationParameters[d][0]
-                s = self.normalizationParameters[d][1]
+                u,s = self.normalizationParameters[d]
                 x2[d] = (x[d]*s)+u
         return x2
 
     def initializeMap(self):
         #Assume a 2D map for now
-        self.initialize2DMap()
+        if self.lowDimension == 2:
+            self.initialize2DMap()
+        else:
+            raise ValueError("Only 2D maps are available.")
 
     def initialize2DMap(self):
-        """Randomly set intial node positions in higher dimensional space,
+        """Randomly set initial node positions in higher dimensional space,
         and place into regular square grid in 2D space. Initial positions in 
         high-dimensional space will be random but within 2 sigma.
         """
         for inode in xrange(self.nnodes):
-            highCoords = [ random.random()*2.*random.choice([-1.,1.]) for i in xrange(self.highDimension) ]
+            highCoords = [ random()*2.*choice([-1.,1.]) for i in xrange(self.highDimension) ]
             lowX = inode % self.mapLength
             lowY = inode / self.mapLength
             lowCoords = [lowX,lowY]
@@ -153,7 +156,12 @@ class map():
             if progress:
                 if istep % int((nsteps/10.)) == 0:
                     print '{}% done'.format(float(istep)/nsteps*100)
-            randomDataPoint = random.choice(self.data)
+            
+            if self.normalize:
+                randomDataPoint = choice(self.normalizedData)
+            else:
+                randomDataPoint = choice(self.data)
+
             closestNodeIndex = self.findBestMatch(randomDataPoint)
             searchRadius2 =  math.pow(radius0*math.exp(-float(istep)/nsteps*tscale),2)
             learningRate = learn0*math.exp(-float(istep)/nsteps)
