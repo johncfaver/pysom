@@ -3,6 +3,7 @@
 from copy import deepcopy
 from random import random, choice
 import math
+import json
 
 def meanAndStd(x):
     """Return mean and standard devation of a list of floats."""
@@ -21,29 +22,57 @@ def distance(x,y):
     return math.sqrt(squareDistance(x,y))
 
 class map():
-    def __init__(self, data, nnodes=100, dimension=2, normalize=True):
+    def __init__(self, data, nnodes=100, dimension=2, normalize=True, ignoreColumns=[], nodes=[], initialize=True):
         """Set up a self-organizing map to model input data.
         Input data should be a list of lists (2D array-like)
         of floats.
         """
-        self.data           = data            
+        self.data           = data
         self.ndata          = len(data)
         self.nnodes         = nnodes
         self.lowDimension   = dimension
         self.highDimension  = len(self.data[0])
         self.mapLength      = int(math.pow(nnodes,1./dimension))
         self.normalize      = normalize
-        self.ignoreColumns  = []
-        self.nodes          = []
-        
+        self.ignoreColumns  = ignoreColumns
+        self.nodes          = nodes
+
         #Check input data
-        self.checkInputs() 
-        #Normalize input data 
+        self.checkInputs()
+        #Normalize input data
         if self.normalize:
             self.normalizeData()
-        #Set up the map.
-        self.initializeMap()
-   
+
+        if initialize:
+            #Set up the map.
+            self.initializeMap()
+
+    def saveModel(self, name="som.model"):
+
+        dictNodes = [ node.toDict() for node in self.nodes ]
+
+        somDict = {
+            "data": self.data,
+            "ndata": self.ndata,
+            "nnodes": self.nnodes,
+            "lowDimension": self.lowDimension,
+            "highDimension": self.highDimension,
+            "mapLength": self.mapLength,
+            "normalize": self.normalize,
+            "ignoreColumns": self.ignoreColumns,
+            "dictNodes": dictNodes
+        }
+        with open(name, 'w') as outfile:
+            json.dump(somDict,outfile)
+
+    @staticmethod
+    def openModel(name):
+        somDict = json.load(open(name,'r'))
+        dictNodes = somDict["dictNodes"]
+        nodes = [node.fromDict(dictNode) for dictNode in dictNodes]
+        loadedSom = map(somDict["data"],somDict["nnodes"],somDict["lowDimension"],somDict["normalize"],somDict["ignoreColumns"],nodes,initialize=False)
+        return loadedSom
+
     def checkInputs(self):
         """Convert input data to float, and check other variables."""
         print "Checking input data...",
@@ -113,7 +142,7 @@ class map():
 
     def initialize2DMap(self):
         """Randomly set initial node positions in higher dimensional space,
-        and place into regular square grid in 2D space. Initial positions in 
+        and place into regular square grid in 2D space. Initial positions in
         high-dimensional space will be random but within 2 sigma.
         """
         for inode in xrange(self.nnodes):
@@ -122,7 +151,7 @@ class map():
             lowY = inode / self.mapLength
             lowCoords = [lowX,lowY]
             self.nodes.append(node(highCoords,lowCoords,index=inode))
-    
+
     def findBestMatch(self, x):
         """Return index of node nearest data point x"""
         distance_min = 1.e50
@@ -156,7 +185,7 @@ class map():
             if progress:
                 if istep % int((nsteps/10.)) == 0:
                     print '{}% done'.format(float(istep)/nsteps*100)
-            
+
             if self.normalize:
                 randomDataPoint = choice(self.normalizedData)
             else:
@@ -196,7 +225,7 @@ class map():
 
     def updateU_values(self, radius=2.):
         """Update u_values for each node.
-        For each node, find nodes within radius in low-dimensional space, 
+        For each node, find nodes within radius in low-dimensional space,
         and compute the average distance from this node to those nodes in
         the high-dimensional space.
         """
@@ -226,9 +255,9 @@ class map():
         return self.nodes[closestNodeIndex].lowCoords
 
 class node():
-    def __init__(self, highCoords, lowCoords, index=None):
+    def __init__(self, highCoords, lowCoords, u_value=0., index=None):
         """Each node consists of coordinates in the higher dimensional space
-        and the lower dimensional space. Each node is also characterized by 
+        and the lower dimensional space. Each node is also characterized by
         a u_value, which is the average distance between this node and its
         low-dimensional neighbors in the high-dimensional space.
         """
@@ -236,8 +265,23 @@ class node():
         self.highDimension = len(highCoords)
         self.lowCoords = lowCoords
         self.lowDimension = len(lowCoords)
-        self.u_value = 0.
+        self.u_value = u_value
         self.index = index
+
+    def toDict(self):
+        nodeDict = {
+            "highCoords": self.highCoords,
+            "highDimension": self.highDimension,
+            "lowCoords": self.lowCoords,
+            "lowDimension": self.lowDimension,
+            "u_value": self.u_value,
+            "index": self.index
+        }
+        return nodeDict
+
+    @staticmethod
+    def fromDict(dictNodes):
+        return node(dictNodes["highCoords"],dictNodes["lowCoords"],dictNodes["u_value"],dictNodes["index"])
 
     def lowDistanceFrom(self, x):
         """Return distance from point x in low dimensional space."""
@@ -271,5 +315,3 @@ class node():
         #print "Moving node {} by {}".format(self.index,x)
         for i in xrange(self.lowDimension):
             self.lowCoords[i] += x[i]
-
-   
